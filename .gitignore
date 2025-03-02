@@ -1,1 +1,3 @@
 /target
+.env
+cookie_key.bin
