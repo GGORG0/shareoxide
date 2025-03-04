@@ -1,3 +1,6 @@
 /target
-.env
+
+/.env
+/config.toml
+
 cookie_key.bin

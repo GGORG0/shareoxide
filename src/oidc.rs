@@ -1,4 +1,4 @@
-use std::{env, str::FromStr as _};
+use std::str::FromStr as _;
 
 use axum::{
     extract::{Request, State},
@@ -10,16 +10,17 @@ use axum_extra::extract::PrivateCookieJar;
 use cookie::Cookie;
 use openidconnect::{
     core::{self, CoreGenderClaim, CoreIdToken, CoreIdTokenClaims, CoreTokenResponse},
-    AccessToken, AdditionalClaims, AdditionalProviderMetadata, ClaimsVerificationError, ClientId,
-    ClientSecret, EndpointMaybeSet, EndpointNotSet, EndpointSet, HttpClientError, IdTokenClaims,
-    IssuerUrl, Nonce, OAuth2TokenResponse as _, ProviderMetadata, RefreshToken, RevocationUrl,
-    TokenResponse, UserInfoClaims, UserInfoError,
+    AccessToken, AdditionalClaims, AdditionalProviderMetadata, ClaimsVerificationError,
+    EndpointMaybeSet, EndpointNotSet, EndpointSet, HttpClientError, IdTokenClaims, Nonce,
+    OAuth2TokenResponse as _, ProviderMetadata, RefreshToken, RevocationUrl, TokenResponse,
+    UserInfoClaims, UserInfoError,
 };
 use reqwest::{Method, StatusCode};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tracing::instrument;
 
-use crate::{extract_url::ExtractUrl, state::AppState};
+use crate::{extract_url::ExtractUrl, settings::Settings, state::AppState};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct RevocationEndpointProviderMetadata {
@@ -60,27 +61,27 @@ pub type OidcClient = core::CoreClient<
 
 #[derive(Error, Debug)]
 pub enum InitOidcError {
-    #[error("missing environment variable: {0}")]
-    MissingEnvVar(#[from] env::VarError),
-
     #[error("reqwest error: {0}")]
-    ReqwestError(#[from] reqwest::Error),
+    Reqwest(#[from] reqwest::Error),
 
     #[error("URL parse error: {0}")]
-    UrlParseError(#[from] openidconnect::url::ParseError),
+    UrlParse(#[from] openidconnect::url::ParseError),
 
     #[error("OIDC discovery error: {0}")]
-    DiscoveryError(
+    Discovery(
         #[from] openidconnect::DiscoveryError<openidconnect::HttpClientError<reqwest::Error>>,
     ),
 }
 
-pub async fn init_oidc(http_client: &reqwest::Client) -> Result<OidcClient, InitOidcError> {
-    let issuer_url = IssuerUrl::new(env::var("OIDC_ISSUER")?)?;
-
+#[instrument(skip(http_client, settings))]
+pub async fn init_oidc(
+    http_client: &reqwest::Client,
+    settings: &Settings,
+) -> Result<OidcClient, InitOidcError> {
     // TODO: handle providers without a revocation endpoint
     let provider_metadata =
-        RevocableProviderMetadata::discover_async(issuer_url, http_client).await?;
+        RevocableProviderMetadata::discover_async(settings.oidc.issuer.clone(), http_client)
+            .await?;
 
     let revocation_endpoint = provider_metadata
         .additional_metadata()
@@ -89,8 +90,8 @@ pub async fn init_oidc(http_client: &reqwest::Client) -> Result<OidcClient, Init
 
     let client = core::CoreClient::from_provider_metadata(
         provider_metadata,
-        ClientId::new(env::var("OIDC_CLIENT_ID")?),
-        Some(ClientSecret::new(env::var("OIDC_CLIENT_SECRET")?)),
+        settings.oidc.client_id.clone(),
+        Some(settings.oidc.client_secret.clone()),
     )
     .set_revocation_url(RevocationUrl::new(revocation_endpoint)?);
 

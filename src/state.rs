@@ -3,7 +3,7 @@ use std::{fs, ops::Deref, sync::Arc};
 use axum::extract::FromRef;
 use cookie::Key;
 
-use crate::oidc::OidcClient;
+use crate::{oidc::OidcClient, settings::Settings};
 
 #[derive(Clone)]
 pub struct AppState(Arc<InnerState>);
@@ -23,14 +23,15 @@ impl Deref for AppState {
 }
 
 pub struct InnerState {
-    pub key: Key,
+    pub settings: Arc<Settings>,
+    pub cookie_key: Key,
     pub oidc_client: OidcClient,
     pub http_client: reqwest::Client,
 }
 
 impl FromRef<AppState> for Key {
     fn from_ref(state: &AppState) -> Self {
-        state.0.key.clone()
+        state.0.cookie_key.clone()
     }
 }
 
