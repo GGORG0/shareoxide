@@ -9,7 +9,6 @@ axum-extra = { version = "0.10.0", features = ["cookie-private"] }
 color-eyre = "0.6.3"
 config = "0.15.9"
 cookie = { version = "0.18.1", features = ["key-expansion"] }
-diesel = { version = "2.2.8", features = ["postgres"] }
 dotenvy = "0.15.7"
 openidconnect = { version = "4.0.0", default-features = false, features = [
     "reqwest",
