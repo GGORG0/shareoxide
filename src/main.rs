@@ -70,13 +70,11 @@ async fn main() -> color_eyre::Result<()> {
 
         let mut res = res.wrap_err("failed to load settings");
 
-        if add_suggestion {
+        if add_suggestion && !std::path::Path::new("config.toml").exists() {
             let example_settings = Settings::example();
             let example_settings = toml::to_string_pretty(&example_settings)?;
 
-            if !std::path::Path::new("config.toml").exists() {
-                std::fs::write("config.toml", example_settings)?;
-            }
+            std::fs::write("config.toml", example_settings)?;
 
             res = res.suggestion("An example configuration file has been created at `config.toml` in the current directory.");
         }

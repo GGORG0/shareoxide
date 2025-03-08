@@ -7,7 +7,7 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
 };
 use axum_extra::extract::PrivateCookieJar;
-use cookie::Cookie;
+use cookie::{time::Duration, Cookie};
 use openidconnect::{
     core::{self, CoreGenderClaim, CoreIdToken, CoreIdTokenClaims, CoreTokenResponse},
     AccessToken, AdditionalClaims, AdditionalProviderMetadata, ClaimsVerificationError,
@@ -18,7 +18,7 @@ use openidconnect::{
 use reqwest::{Method, StatusCode};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 use crate::{extract_url::ExtractUrl, settings::Settings, state::AppState};
 
@@ -119,7 +119,11 @@ impl AuthCookie {
         ];
 
         for (name, value) in cookies {
-            jar = jar.add(Cookie::build((name, value)).path("/"));
+            jar = jar.add(
+                Cookie::build((name, value))
+                    .path("/")
+                    .max_age(Duration::days(14)),
+            );
         }
 
         jar
@@ -265,7 +269,7 @@ pub async fn auth_middleware(
         let this_url = this_url.clone();
         let method = request.method().clone();
         move |or: (StatusCode, String)| {
-            dbg!(&or);
+            debug!("Re-authenticating user: {}", or.1);
             if method == Method::GET {
                 let mut redirect_url = this_url.clone();
                 redirect_url.set_path("/auth/login");
@@ -305,6 +309,7 @@ pub async fn auth_middleware(
     {
         Ok(claims) => claims.clone(),
         Err(_) => match if state.oidc_client.token_uri().is_some() {
+            debug!("Refreshing user's tokens");
             match state
                 .oidc_client
                 .exchange_refresh_token(&auth_cookie.refresh_token)
@@ -367,7 +372,7 @@ pub mod api {
         response::{IntoResponse, Redirect},
     };
     use axum_extra::extract::PrivateCookieJar;
-    use cookie::Cookie;
+    use cookie::{time::Duration, Cookie};
     use openidconnect::{
         core::{CoreIdToken, CoreResponseType},
         AuthenticationFlow, AuthorizationCode, CsrfToken, Nonce, RedirectUrl, Scope,
@@ -440,7 +445,11 @@ pub mod api {
 
         let jar = jar
             .add(Cookie::new("csrf_state", csrf_state.secret().clone()))
-            .add(Cookie::build(("nonce", nonce.secret().clone())).path("/"));
+            .add(
+                Cookie::build(("nonce", nonce.secret().clone()))
+                    .path("/")
+                    .max_age(Duration::days(14)),
+            );
 
         let jar = match params.redirect_to {
             Some(redirect_to) => jar.add(Cookie::new("login_redirect_to", redirect_to)),
