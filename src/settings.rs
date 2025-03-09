@@ -1,5 +1,6 @@
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 
+use color_eyre::{eyre::Context as _, Section as _};
 use config::{Config, ConfigError, Environment, File};
 use openidconnect::{ClientId, ClientSecret, IssuerUrl};
 use serde::{Deserialize, Serialize};
@@ -42,6 +43,17 @@ pub struct General {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct Db {
+    pub endpoint: String,
+
+    pub namespace: String,
+    pub database: String,
+
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Oidc {
     pub issuer: IssuerUrl,
     pub client_id: ClientId,
@@ -51,6 +63,7 @@ pub struct Oidc {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Settings {
     pub general: General,
+    pub db: Db,
     pub oidc: Oidc,
 }
 
@@ -78,10 +91,51 @@ impl Settings {
         settings.build()?.try_deserialize()
     }
 
+    pub fn try_load() -> color_eyre::Result<Self> {
+        let res = Settings::new();
+
+        let add_suggestion = matches!(
+            &res,
+            Err(ConfigError::Foreign(foreign_error))
+                if matches!(
+                    foreign_error.downcast_ref::<std::io::Error>(),
+                    Some(io_error)
+                        if io_error.kind() == std::io::ErrorKind::NotFound
+                            && io_error.get_ref().is_some_and(|custom_error| {
+                                let custom_error = custom_error.to_string();
+                                custom_error.starts_with("configuration file \"")
+                                    && custom_error.ends_with("\" not found")
+                            })
+                )
+        );
+
+        let mut res = res.wrap_err("failed to load settings");
+
+        if add_suggestion && !std::path::Path::new("config.toml").exists() {
+            let example_settings = Settings::example();
+            let example_settings = toml::to_string_pretty(&example_settings)?;
+
+            std::fs::write("config.toml", example_settings)?;
+
+            res = res.suggestion("An example configuration file has been created at `config.toml` in the current directory.");
+        }
+
+        res
+    }
+
     pub fn example() -> Self {
         Self {
             general: General {
                 listen_address: ListenAddress::default(),
+            },
+            db: Db {
+                endpoint: "ws://localhost:8000".to_string(),
+
+                namespace: "shareoxide".to_string(),
+                database: "shareoxide".to_string(),
+
+                username: "root".to_string(),
+                password: "root".to_string(),
             },
             oidc: Oidc {
                 issuer: IssuerUrl::new("https://example.com".to_string()).unwrap(),

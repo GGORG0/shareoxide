@@ -7,3 +7,5 @@ cookie_key.bin
 
 .direnv
 result*
+
+/.vscode

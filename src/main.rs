@@ -11,14 +11,16 @@ use axum::{
     response::{IntoResponse, Redirect},
     Router,
 };
-use color_eyre::{eyre::WrapErr, Section as _};
-use config::ConfigError;
+use color_eyre::eyre::WrapErr;
 use cookie::Key;
 use reqwest::StatusCode;
-use settings::{env_name, Settings};
-use state::{AppState, GetCookieKey as _, InnerState};
+use surrealdb::{
+    engine::any::{self, Any},
+    opt::auth::{Database, Namespace, Root},
+    Surreal,
+};
 use tokio::net::TcpListener;
-use tracing::{info, level_filters::LevelFilter};
+use tracing::{debug, info, instrument, level_filters::LevelFilter};
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{
     fmt::format::FmtSpan, layer::SubscriberExt as _, util::SubscriberInitExt as _,
@@ -30,7 +32,11 @@ use utoipa_redoc::{Redoc, Servable};
 use utoipa_scalar::{Scalar, Servable as _};
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::oidc::init_oidc;
+use crate::{
+    oidc::init_oidc,
+    settings::{env_name, Settings},
+    state::{AppState, GetCookieKey as _, InnerState},
+};
 
 #[derive(OpenApi)]
 #[openapi()]
@@ -50,48 +56,23 @@ async fn main() -> color_eyre::Result<()> {
         env!("BUILD_TIMESTAMP")
     );
 
-    let settings = Arc::new({
-        let res = Settings::new();
-
-        let add_suggestion = matches!(
-            &res,
-            Err(ConfigError::Foreign(foreign_error))
-                if matches!(
-                    foreign_error.downcast_ref::<std::io::Error>(),
-                    Some(io_error)
-                        if io_error.kind() == std::io::ErrorKind::NotFound
-                            && io_error.get_ref().is_some_and(|custom_error| {
-                                let custom_error = custom_error.to_string();
-                                custom_error.starts_with("configuration file \"")
-                                    && custom_error.ends_with("\" not found")
-                            })
-                )
-        );
-
-        let mut res = res.wrap_err("failed to load settings");
-
-        if add_suggestion && !std::path::Path::new("config.toml").exists() {
-            let example_settings = Settings::example();
-            let example_settings = toml::to_string_pretty(&example_settings)?;
-
-            std::fs::write("config.toml", example_settings)?;
-
-            res = res.suggestion("An example configuration file has been created at `config.toml` in the current directory.");
-        }
-
-        res?
-    });
+    let settings = Arc::new(Settings::try_load()?);
 
     let http_client = init_reqwest().wrap_err("failed to initialize HTTP client")?;
     let oidc = init_oidc(&http_client, &settings)
         .await
         .wrap_err("failed to initialize OIDC client")?;
 
+    let db = init_surrealdb(&settings)
+        .await
+        .wrap_err("failed to initialize SurrealDB client")?;
+
     let app_state = AppState::new(InnerState {
         settings: settings.clone(),
         cookie_key: Key::get_cookie_key(),
         oidc_client: oidc,
         http_client,
+        db,
     });
 
     let app = init_axum(app_state);
@@ -132,6 +113,51 @@ fn init_reqwest() -> Result<reqwest::Client, reqwest::Error> {
     reqwest::ClientBuilder::new()
         .redirect(reqwest::redirect::Policy::none())
         .build()
+}
+
+#[instrument(skip(settings))]
+async fn init_surrealdb(settings: &Settings) -> Result<Surreal<Any>, surrealdb::Error> {
+    let db = any::connect(&settings.db.endpoint).await?;
+
+    debug!("Trying to sign in as a database user");
+    if let Err(surrealdb::Error::Api(surrealdb::error::Api::Query(e))) = db
+        .signin(Database {
+            namespace: &settings.db.namespace,
+            database: &settings.db.database,
+            username: &settings.db.username,
+            password: &settings.db.password,
+        })
+        .await
+    {
+        if e == *"There was a problem with the database: There was a problem with authentication" {
+            debug!("Trying to sign in as a namespace user");
+            if let Err(surrealdb::Error::Api(surrealdb::error::Api::Query(e))) = db
+                .signin(Namespace {
+                    namespace: &settings.db.namespace,
+                    username: &settings.db.username,
+                    password: &settings.db.password,
+                })
+                .await
+            {
+                if e == *"There was a problem with the database: There was a problem with authentication" {
+                    debug!("Trying to sign in as a root user");
+                    db.signin(Root {
+                        username: &settings.db.username,
+                        password: &settings.db.password,
+                    })
+                    .await?;
+                }
+            }
+        }
+    }
+
+    db.use_ns(&settings.db.namespace)
+        .use_db(&settings.db.database)
+        .await?;
+
+    db.query(include_str!("init.surrealql")).await?;
+
+    Ok(db)
 }
 
 fn init_axum(state: AppState) -> Router {

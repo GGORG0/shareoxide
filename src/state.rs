@@ -2,6 +2,7 @@ use std::{fs, ops::Deref, sync::Arc};
 
 use axum::extract::FromRef;
 use cookie::Key;
+use surrealdb::{engine::any::Any, Surreal};
 
 use crate::{oidc::OidcClient, settings::Settings};
 
@@ -27,6 +28,7 @@ pub struct InnerState {
     pub cookie_key: Key,
     pub oidc_client: OidcClient,
     pub http_client: reqwest::Client,
+    pub db: Surreal<Any>,
 }
 
 impl FromRef<AppState> for Key {
