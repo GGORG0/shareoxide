@@ -4,6 +4,7 @@ mod oidc;
 mod settings;
 mod state;
 mod user;
+mod schema;
 
 use std::{env, net::SocketAddr, sync::Arc};
 
