@@ -51,10 +51,9 @@ async fn main() -> color_eyre::Result<()> {
     init_tracing().wrap_err("failed to set global tracing subscriber")?;
 
     info!(
-        "Starting {} {} (built on {})...",
+        "Starting {} {}...",
         env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION"),
-        env!("BUILD_TIMESTAMP")
     );
 
     let settings = Arc::new(Settings::try_load()?);
