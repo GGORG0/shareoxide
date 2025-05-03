@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_imports, unused_variables)]
+
 use serde::{de, Deserialize, Serialize};
 use surrealdb::RecordId;
 
