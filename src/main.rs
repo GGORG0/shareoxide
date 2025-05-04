@@ -14,6 +14,7 @@ use axum_oidc::{
 };
 use color_eyre::eyre::WrapErr;
 use color_eyre::Result;
+use routes::RouteType;
 use serde::{Deserialize, Serialize};
 use surrealdb::{
     engine::any::{self, Any},
@@ -223,9 +224,13 @@ async fn init_axum(
             .clone()
             .into_iter()
             .filter(|(_, autologin)| *autologin)
-            .fold(autologin_router, |autologin_router, (route, _)| {
-                autologin_router.routes(route)
-            });
+            .fold(
+                autologin_router,
+                |autologin_router, (route, _)| match route {
+                    RouteType::OpenApi(route) => autologin_router.routes(route),
+                    RouteType::Undocumented((path, route)) => autologin_router.route(path, route),
+                },
+            );
 
         autologin_router.layer(oidc_login_service)
     };
@@ -236,7 +241,10 @@ async fn init_axum(
         .clone()
         .into_iter()
         .filter(|(_, autologin)| !*autologin)
-        .fold(router, |router, (route, _)| router.routes(route));
+        .fold(router, |router, (route, _)| match route {
+            RouteType::OpenApi(route) => router.routes(route),
+            RouteType::Undocumented((path, route)) => router.route(path, route),
+        });
 
     let (router, api) = router
         .route("/oidc", any(handle_oidc_redirect::<GroupClaims>))

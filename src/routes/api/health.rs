@@ -1,11 +1,13 @@
 use utoipa_axum::routes;
 
+use crate::routes::RouteType;
+
 use super::Route;
 
 const PATH: &str = "/api/health";
 
 pub fn routes() -> Vec<Route> {
-    vec![(routes!(get), false)]
+    vec![(RouteType::OpenApi(routes!(get)), false)]
 }
 
 /// Get health of the service (returns "ok")

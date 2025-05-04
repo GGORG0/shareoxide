@@ -3,14 +3,14 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use utoipa_axum::routes;
 
-use crate::settings::ArcSettings;
+use crate::{routes::RouteType, settings::ArcSettings};
 
 use super::Route;
 
 const PATH: &str = "/api/info";
 
 pub fn routes() -> Vec<Route> {
-    vec![(routes!(get), false)]
+    vec![(RouteType::OpenApi(routes!(get)), false)]
 }
 
 /// Get information about the service
