@@ -10,6 +10,8 @@ axum-oidc = { git = "https://github.com/pfzetto/axum-oidc.git", branch = "pfzett
 color-eyre = "0.6.4"
 config = "0.15.11"
 dotenvy = "0.15.7"
+http = "1.3.1"
+http-serde-ext = "1.0.2"
 openidconnect = { version = "4.0.0", default-features = false, features = [
     "reqwest",
     "rustls-tls",

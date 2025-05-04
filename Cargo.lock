@@ -1794,6 +1794,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "http-serde-ext"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "665c24b8e7e21688dc74edb228f07c1815bbc7ff3b48a3ee72fa20937fbde095"
+dependencies = [
+ "http",
+ "serde",
+]
+
+[[package]]
 name = "httparse"
 version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3950,6 +3960,8 @@ dependencies = [
  "color-eyre",
  "config",
  "dotenvy",
+ "http",
+ "http-serde-ext",
  "openidconnect",
  "paste",
  "reqwest",

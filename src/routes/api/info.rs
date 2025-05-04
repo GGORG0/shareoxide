@@ -26,7 +26,7 @@ async fn get(State(settings): State<ArcSettings>) -> Json<GetInfoResponse> {
         name: env!("CARGO_PKG_NAME"),
         version: env!("CARGO_PKG_VERSION"),
         repo: env!("CARGO_PKG_REPOSITORY"),
-        public_url: settings.general.public_url.clone(),
+        public_url: settings.general.public_url.to_string(),
     })
 }
 

@@ -1,7 +1,11 @@
-use std::{net::{Ipv4Addr, Ipv6Addr, SocketAddr}, sync::Arc};
+use std::{
+    net::{Ipv4Addr, Ipv6Addr, SocketAddr},
+    sync::Arc,
+};
 
 use color_eyre::{eyre::Context as _, Section as _};
 use config::{Config, ConfigError, Environment, File};
+use http::Uri;
 use openidconnect::{ClientId, ClientSecret, IssuerUrl};
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumString, IntoStaticStr};
@@ -40,7 +44,9 @@ impl From<ListenAddress> for Vec<SocketAddr> {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct General {
     pub listen_address: ListenAddress,
-    pub public_url: String,
+
+    #[serde(with = "http_serde_ext::uri")]
+    pub public_url: Uri,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -130,7 +136,9 @@ impl Settings {
         Self {
             general: General {
                 listen_address: ListenAddress::default(),
-                public_url: "http://localhost:8080".to_string(),
+                public_url: "http://localhost:8080"
+                    .parse()
+                    .expect("hardcoded uri should parse"),
             },
             db: Db {
                 endpoint: "ws://localhost:8000".to_string(),

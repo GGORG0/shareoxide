@@ -11,6 +11,7 @@ use axum::{
 };
 use axum_oidc::{
     error::MiddlewareError, handle_oidc_redirect, OidcAuthLayer, OidcClient, OidcLoginLayer,
+    OidcRpInitiatedLogout,
 };
 use color_eyre::eyre::WrapErr;
 use color_eyre::Result;
@@ -218,7 +219,15 @@ async fn init_axum(
     let routes = routes::routes();
 
     let autologin_router = {
-        let autologin_router = OpenApiRouter::new();
+        let autologin_router = OpenApiRouter::new().route(
+            "/logout",
+            any({
+                let public_url = state.settings.general.public_url.clone();
+                |logout: OidcRpInitiatedLogout| async move {
+                    logout.with_post_logout_redirect(public_url)
+                }
+            }),
+        );
 
         let autologin_router = routes
             .clone()
