@@ -4,7 +4,7 @@ mod settings;
 mod state;
 mod user;
 
-use std::{net::SocketAddr, ops::Deref, sync::Arc};
+use std::{net::SocketAddr, ops::Deref, sync::Arc, time::Duration};
 
 use axum::{
     error_handling::HandleErrorLayer, http::StatusCode, response::IntoResponse, routing::any,
@@ -21,10 +21,10 @@ use surrealdb::{
     opt::auth::{Database, Namespace, Root},
     Surreal,
 };
-use tokio::net::TcpListener;
+use tokio::{net::TcpListener, time::interval};
 use tower::ServiceBuilder;
-use tower_sessions::{cookie::SameSite, Expiry, SessionManagerLayer};
-use tower_sessions_file_store::FileSessionStorage;
+use tower_sessions::{cookie::SameSite, ExpiredDeletion as _, Expiry, SessionManagerLayer};
+use tower_sessions_surrealdb_store::SurrealSessionStore;
 use tracing::{debug, error, info, info_span, instrument, level_filters::LevelFilter, Instrument};
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{
@@ -155,13 +155,26 @@ async fn init_surrealdb(settings: &Settings) -> Result<Surreal<Any>> {
 
 #[instrument(skip(state))]
 async fn init_axum(state: AppState) -> Result<Router> {
-    let session_store = FileSessionStorage::new();
+    let session_store = SurrealSessionStore::new(state.db.clone(), "session".to_string());
+
+    {
+        let session_store = session_store.clone();
+        tokio::task::spawn(async move {
+            let mut timer = interval(Duration::from_secs(60 * 5));
+            loop {
+                timer.tick().await;
+                if let Err(e) = session_store.delete_expired().await {
+                    error!(error = ?e, "Failed to delete expired sessions");
+                }
+            }
+        });
+    }
 
     let session_layer = SessionManagerLayer::new(session_store)
         .with_secure(false)
         .with_same_site(SameSite::Lax)
         .with_expiry(Expiry::OnInactivity(
-            tower_sessions::cookie::time::Duration::seconds(60 * 60),
+            tower_sessions::cookie::time::Duration::minutes(60),
         ));
 
     let handle_error_layer = HandleErrorLayer::new(|e: MiddlewareError| async {
