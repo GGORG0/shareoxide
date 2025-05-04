@@ -1,7 +1,7 @@
 #![allow(dead_code, unused_imports, unused_variables)]
 
 use serde::{de, Deserialize, Serialize};
-use surrealdb::RecordId;
+use surrealdb::{Datetime, RecordId};
 
 macro_rules! define_table {
     ($table:ident $(, $field:ident : $ty:ty)*) => {
@@ -30,8 +30,8 @@ macro_rules! define_table {
     };
 }
 
-define_table!(user, name: String, email: String);
+define_table!(user, subject: String, name: String, email: String);
 define_table!(link, url: String);
-define_table!(file);
-define_table!(paste, content: String, language: String);
-define_table!(short_link, link: String);
+define_table!(shortcut, link: String);
+define_table!(expands_to, r#in: RecordId, out: RecordId);
+define_table!(created, r#in: RecordId, out: RecordId, timestamp: Datetime);
