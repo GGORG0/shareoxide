@@ -1,7 +1,10 @@
 #![allow(dead_code, unused_imports, unused_variables)]
 
+use axum_oidc::OidcClaims;
 use serde::{de, Deserialize, Serialize};
 use surrealdb::{Datetime, RecordId};
+
+use crate::GroupClaims;
 
 macro_rules! define_table {
     ($table:ident $(, $field:ident : $ty:ty)*) => {
@@ -35,3 +38,13 @@ define_table!(link, url: String);
 define_table!(shortcut, link: String);
 define_table!(expands_to, r#in: RecordId, out: RecordId);
 define_table!(created, r#in: RecordId, out: RecordId, timestamp: Datetime);
+
+impl From<OidcClaims<GroupClaims>> for UserData {
+    fn from(claims: OidcClaims<GroupClaims>) -> Self {
+        Self {
+            subject: claims.subject().to_string(),
+            name: claims.name().unwrap().get(None).unwrap().to_string(),
+            email: claims.email().unwrap().to_string(),
+        }
+    }
+}

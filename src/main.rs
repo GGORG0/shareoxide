@@ -1,8 +1,7 @@
-mod health;
+mod routes;
 mod schema;
 mod settings;
 mod state;
-mod user;
 
 use std::{net::SocketAddr, ops::Deref, sync::Arc, time::Duration};
 
@@ -31,7 +30,7 @@ use tracing_subscriber::{
     fmt::format::FmtSpan, layer::SubscriberExt as _, util::SubscriberInitExt as _,
 };
 use utoipa::OpenApi;
-use utoipa_axum::{router::OpenApiRouter, routes};
+use utoipa_axum::router::OpenApiRouter;
 use utoipa_rapidoc::RapiDoc;
 use utoipa_redoc::{Redoc, Servable};
 use utoipa_scalar::{Scalar, Servable as _};
@@ -75,7 +74,8 @@ async fn main() -> Result<()> {
         db,
     });
 
-    let app = init_axum(app_state).await?;
+    let session_layer = init_session_store(&app_state.db).await;
+    let app = init_axum(app_state, session_layer).await?;
     let listener = init_listener(&settings).await?;
 
     info!(
@@ -153,9 +153,8 @@ async fn init_surrealdb(settings: &Settings) -> Result<Surreal<Any>> {
     Ok(db)
 }
 
-#[instrument(skip(state))]
-async fn init_axum(state: AppState) -> Result<Router> {
-    let session_store = SurrealSessionStore::new(state.db.clone(), "session".to_string());
+async fn init_session_store(db: &Surreal<Any>) -> SessionManagerLayer<SurrealSessionStore<Any>> {
+    let session_store = SurrealSessionStore::new(db.clone(), "session".to_string());
 
     {
         let session_store = session_store.clone();
@@ -170,17 +169,24 @@ async fn init_axum(state: AppState) -> Result<Router> {
         });
     }
 
-    let session_layer = SessionManagerLayer::new(session_store)
+    SessionManagerLayer::new(session_store)
         .with_secure(false)
         .with_same_site(SameSite::Lax)
         .with_expiry(Expiry::OnInactivity(
             tower_sessions::cookie::time::Duration::minutes(60),
-        ));
+        ))
+}
 
-    let handle_error_layer = HandleErrorLayer::new(|e: MiddlewareError| async {
-        error!(error = ?e, "An error occurred in OIDC middleware");
-        e.into_response()
-    });
+#[instrument(skip(state, session_layer))]
+async fn init_axum(
+    state: AppState,
+    session_layer: SessionManagerLayer<SurrealSessionStore<Any>>,
+) -> Result<Router> {
+    let handle_error_layer: HandleErrorLayer<_, ()> =
+        HandleErrorLayer::new(|e: MiddlewareError| async {
+            error!(error = ?e, "An error occurred in OIDC middleware");
+            e.into_response()
+        });
 
     let oidc_login_service = ServiceBuilder::new()
         .layer(handle_error_layer.clone())
@@ -191,6 +197,7 @@ async fn init_axum(state: AppState) -> Result<Router> {
         .with_redirect_url(format!("{}/oidc", state.settings.general.public_url).parse()?)
         .with_client_id(state.settings.oidc.client_id.as_str())
         .add_scope("profile")
+        .add_scope("email")
         .add_scope("offline_access");
 
     if let Some(client_secret) = state.settings.oidc.client_secret.as_ref() {
@@ -207,13 +214,24 @@ async fn init_axum(state: AppState) -> Result<Router> {
         .layer(handle_error_layer)
         .layer(OidcAuthLayer::new(oidc_client));
 
-    let autologin_router = OpenApiRouter::new()
-        .routes(routes!(user::profile))
-        .layer(oidc_login_service);
+    let autologin_router = {
+        let mut autologin_router = OpenApiRouter::new();
 
-    let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
-        .merge(autologin_router)
-        .routes(routes!(health::health))
+        for route in routes::autologin_routes() {
+            autologin_router = autologin_router.routes(route);
+        }
+
+        autologin_router.layer(oidc_login_service)
+    };
+
+    let mut router = OpenApiRouter::with_openapi(ApiDoc::openapi())
+        .merge(autologin_router);
+
+    for route in routes::routes() {
+        router = router.routes(route);
+    }
+
+    let (router, api) = router
         .route("/oidc", any(handle_oidc_redirect::<GroupClaims>))
         .with_state(state)
         .split_for_parts();
