@@ -3955,6 +3955,7 @@ dependencies = [
 name = "shareoxide"
 version = "1.0.0"
 dependencies = [
+ "async-trait",
  "axum",
  "axum-oidc",
  "color-eyre",

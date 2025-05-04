@@ -5,6 +5,7 @@ edition = "2021"
 repository = "https://github.com/GGORG0/shareoxide"
 
 [dependencies]
+async-trait = "0.1.88"
 axum = { version = "0.8.4", features = ["macros"] }
 axum-oidc = { git = "https://github.com/pfzetto/axum-oidc.git", branch = "pfzetto" }
 color-eyre = "0.6.4"
