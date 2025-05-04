@@ -1,16 +1,11 @@
-mod health;
-mod user;
+mod api;
 
-use utoipa_axum::{router::UtoipaMethodRouter, routes};
+use utoipa_axum::router::UtoipaMethodRouter;
 
 use crate::state::AppState;
 
-type Route = UtoipaMethodRouter<AppState>;
+type Route = (UtoipaMethodRouter<AppState>, bool);
 
 pub fn routes() -> Vec<Route> {
-    vec![routes!(health::health)]
-}
-
-pub fn autologin_routes() -> Vec<Route> {
-    vec![routes!(user::profile)]
+    [api::routes()].concat()
 }

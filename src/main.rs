@@ -214,20 +214,29 @@ async fn init_axum(
         .layer(handle_error_layer)
         .layer(OidcAuthLayer::new(oidc_client));
 
+    let routes = routes::routes();
+
     let autologin_router = {
         let mut autologin_router = OpenApiRouter::new();
 
-        for route in routes::autologin_routes() {
+        for (route, _) in routes
+            .clone()
+            .into_iter()
+            .filter(|(_, autologin)| *autologin)
+        {
             autologin_router = autologin_router.routes(route);
         }
 
         autologin_router.layer(oidc_login_service)
     };
 
-    let mut router = OpenApiRouter::with_openapi(ApiDoc::openapi())
-        .merge(autologin_router);
+    let mut router = OpenApiRouter::with_openapi(ApiDoc::openapi()).merge(autologin_router);
 
-    for route in routes::routes() {
+    for (route, _) in routes
+        .clone()
+        .into_iter()
+        .filter(|(_, autologin)| !*autologin)
+    {
         router = router.routes(route);
     }
 

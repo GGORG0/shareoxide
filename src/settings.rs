@@ -1,4 +1,4 @@
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::{net::{Ipv4Addr, Ipv6Addr, SocketAddr}, sync::Arc};
 
 use color_eyre::{eyre::Context as _, Section as _};
 use config::{Config, ConfigError, Environment, File};
@@ -67,6 +67,8 @@ pub struct Settings {
     pub db: Db,
     pub oidc: Oidc,
 }
+
+pub type ArcSettings = Arc<Settings>;
 
 impl Settings {
     pub fn new() -> Result<Self, ConfigError> {
