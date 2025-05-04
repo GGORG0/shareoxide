@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumString, IntoStaticStr};
 use tracing::warn;
 
-const ENV_PREFIX: &str = "SHAREOXIDE";
+const ENV_PREFIX: &str = "SO";
 const ENV_SEPARATOR: &str = "_";
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -40,6 +40,7 @@ impl From<ListenAddress> for Vec<SocketAddr> {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct General {
     pub listen_address: ListenAddress,
+    pub public_url: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -57,7 +58,7 @@ pub struct Db {
 pub struct Oidc {
     pub issuer: IssuerUrl,
     pub client_id: ClientId,
-    pub client_secret: ClientSecret,
+    pub client_secret: Option<ClientSecret>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -127,6 +128,7 @@ impl Settings {
         Self {
             general: General {
                 listen_address: ListenAddress::default(),
+                public_url: "http://localhost:8080".to_string(),
             },
             db: Db {
                 endpoint: "ws://localhost:8000".to_string(),
@@ -140,7 +142,7 @@ impl Settings {
             oidc: Oidc {
                 issuer: IssuerUrl::new("https://example.com".to_string()).unwrap(),
                 client_id: ClientId::new("client_id".to_string()),
-                client_secret: ClientSecret::new("client_secret".to_string()),
+                client_secret: Some(ClientSecret::new("client_secret".to_string())),
             },
         }
     }

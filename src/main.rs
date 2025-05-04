@@ -1,27 +1,31 @@
-mod extract_url;
 mod health;
-mod oidc;
+mod schema;
 mod settings;
 mod state;
 mod user;
-mod schema;
 
-use std::{env, net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, ops::Deref, sync::Arc};
 
 use axum::{
-    response::{IntoResponse, Redirect},
+    error_handling::HandleErrorLayer, http::StatusCode, response::IntoResponse, routing::any,
     Router,
 };
+use axum_oidc::{
+    error::MiddlewareError, handle_oidc_redirect, OidcAuthLayer, OidcClient, OidcLoginLayer,
+};
 use color_eyre::eyre::WrapErr;
-use cookie::Key;
-use reqwest::StatusCode;
+use color_eyre::Result;
+use serde::{Deserialize, Serialize};
 use surrealdb::{
     engine::any::{self, Any},
     opt::auth::{Database, Namespace, Root},
     Surreal,
 };
 use tokio::net::TcpListener;
-use tracing::{debug, info, instrument, level_filters::LevelFilter};
+use tower::ServiceBuilder;
+use tower_sessions::{cookie::SameSite, Expiry, SessionManagerLayer};
+use tower_sessions_file_store::FileSessionStorage;
+use tracing::{debug, error, info, info_span, instrument, level_filters::LevelFilter, Instrument};
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{
     fmt::format::FmtSpan, layer::SubscriberExt as _, util::SubscriberInitExt as _,
@@ -34,17 +38,23 @@ use utoipa_scalar::{Scalar, Servable as _};
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
-    oidc::init_oidc,
     settings::{env_name, Settings},
-    state::{AppState, GetCookieKey as _, InnerState},
+    state::{AppState, InnerState},
 };
 
 #[derive(OpenApi)]
 #[openapi()]
 struct ApiDoc;
 
+#[derive(Deserialize, Serialize, Debug, Clone, Default)]
+pub struct GroupClaims {
+    groups: Vec<String>,
+}
+impl axum_oidc::AdditionalClaims for GroupClaims {}
+impl openidconnect::AdditionalClaims for GroupClaims {}
+
 #[tokio::main]
-async fn main() -> color_eyre::Result<()> {
+async fn main() -> Result<()> {
     color_eyre::install()?;
 
     dotenvy::dotenv().ok();
@@ -58,33 +68,22 @@ async fn main() -> color_eyre::Result<()> {
 
     let settings = Arc::new(Settings::try_load()?);
 
-    let http_client = init_reqwest().wrap_err("failed to initialize HTTP client")?;
-    let oidc = init_oidc(&http_client, &settings)
-        .await
-        .wrap_err("failed to initialize OIDC client")?;
-
-    let db = init_surrealdb(&settings)
-        .await
-        .wrap_err("failed to initialize SurrealDB client")?;
+    let db = init_surrealdb(&settings).await?;
 
     let app_state = AppState::new(InnerState {
         settings: settings.clone(),
-        cookie_key: Key::get_cookie_key(),
-        oidc_client: oidc,
-        http_client,
         db,
     });
 
-    let app = init_axum(app_state);
-    let listener = init_listener(&settings)
-        .await
-        .wrap_err("failed to bind to address")?;
+    let app = init_axum(app_state).await?;
+    let listener = init_listener(&settings).await?;
 
     info!(
-        "listening on {}",
+        "listening on {} ({})",
         listener
             .local_addr()
-            .wrap_err("failed to get local address")?
+            .wrap_err("failed to get local address")?,
+        settings.general.public_url
     );
 
     axum::serve(listener, app.into_make_service())
@@ -94,7 +93,7 @@ async fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
-fn init_tracing() -> color_eyre::Result<()> {
+fn init_tracing() -> Result<()> {
     tracing_subscriber::Registry::default()
         .with(tracing_subscriber::fmt::layer().with_span_events(FmtSpan::NEW | FmtSpan::CLOSE))
         .with(ErrorLayer::default())
@@ -109,14 +108,8 @@ fn init_tracing() -> color_eyre::Result<()> {
     Ok(())
 }
 
-fn init_reqwest() -> Result<reqwest::Client, reqwest::Error> {
-    reqwest::ClientBuilder::new()
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-}
-
 #[instrument(skip(settings))]
-async fn init_surrealdb(settings: &Settings) -> Result<Surreal<Any>, surrealdb::Error> {
+async fn init_surrealdb(settings: &Settings) -> Result<Surreal<Any>> {
     let db = any::connect(&settings.db.endpoint).await?;
 
     debug!("Trying to sign in as a database user");
@@ -160,34 +153,83 @@ async fn init_surrealdb(settings: &Settings) -> Result<Surreal<Any>, surrealdb::
     Ok(db)
 }
 
-fn init_axum(state: AppState) -> Router {
+#[instrument(skip(state))]
+async fn init_axum(state: AppState) -> Result<Router> {
+    let session_store = FileSessionStorage::new();
+
+    let session_layer = SessionManagerLayer::new(session_store)
+        .with_secure(false)
+        .with_same_site(SameSite::Lax)
+        .with_expiry(Expiry::OnInactivity(
+            tower_sessions::cookie::time::Duration::seconds(60 * 60),
+        ));
+
+    let handle_error_layer = HandleErrorLayer::new(|e: MiddlewareError| async {
+        error!(error = ?e, "An error occurred in OIDC middleware");
+        e.into_response()
+    });
+
+    let oidc_login_service = ServiceBuilder::new()
+        .layer(handle_error_layer.clone())
+        .layer(OidcLoginLayer::<GroupClaims>::new());
+
+    let mut oidc_client = OidcClient::<GroupClaims>::builder()
+        .with_default_http_client()
+        .with_redirect_url(format!("{}/oidc", state.settings.general.public_url).parse()?)
+        .with_client_id(state.settings.oidc.client_id.as_str())
+        .add_scope("profile")
+        .add_scope("offline_access");
+
+    if let Some(client_secret) = state.settings.oidc.client_secret.as_ref() {
+        oidc_client = oidc_client.with_client_secret(client_secret.secret().clone());
+    }
+
+    let oidc_client = oidc_client
+        .discover(state.settings.oidc.issuer.deref().clone())
+        .instrument(info_span!("OIDC discovery"))
+        .await?
+        .build();
+
+    let oidc_auth_service = ServiceBuilder::new()
+        .layer(handle_error_layer)
+        .layer(OidcAuthLayer::new(oidc_client));
+
+    let autologin_router = OpenApiRouter::new()
+        .routes(routes!(user::profile))
+        .layer(oidc_login_service);
+
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
+        .merge(autologin_router)
         .routes(routes!(health::health))
-        .nest("/auth", oidc::api::router())
-        .nest("/user", user::router(state.clone()))
+        .route("/oidc", any(handle_oidc_redirect::<GroupClaims>))
         .with_state(state)
         .split_for_parts();
 
-    let spec_path = "/apidoc/openapi.json";
+    let openapi_prefix = "/apidoc";
+    let spec_path = format!("{openapi_prefix}/openapi.json");
 
     let router = router
-        .merge(SwaggerUi::new("/swagger-ui").url(spec_path, api.clone()))
-        .merge(Redoc::with_url("/redoc", api.clone()))
-        .merge(RapiDoc::new(spec_path).path("/rapidoc"))
-        .merge(Scalar::with_url("/scalar", api));
+        .merge(
+            SwaggerUi::new(format!("{openapi_prefix}/swagger-ui"))
+                .url(spec_path.clone(), api.clone()),
+        )
+        .merge(Redoc::with_url(
+            format!("{openapi_prefix}/redoc"),
+            api.clone(),
+        ))
+        .merge(RapiDoc::new(spec_path).path(format!("{openapi_prefix}/rapidoc")))
+        .merge(Scalar::with_url(format!("{openapi_prefix}/scalar"), api));
 
-    router.merge(
-        Router::new()
-            .route(
-                "/",
-                axum::routing::get(|| async { Redirect::temporary("/scalar") }),
-            )
-            .fallback(|| async { (StatusCode::NOT_FOUND, "Not found").into_response() }),
-    )
+    let router = router
+        .layer(oidc_auth_service)
+        .layer(session_layer)
+        .fallback(|| async { (StatusCode::NOT_FOUND, "Not found").into_response() });
+
+    Ok(router)
 }
 
-async fn init_listener(settings: &Settings) -> Result<TcpListener, std::io::Error> {
+async fn init_listener(settings: &Settings) -> Result<TcpListener> {
     let addr: Vec<SocketAddr> = settings.general.listen_address.clone().into();
 
-    TcpListener::bind(addr.as_slice()).await
+    Ok(TcpListener::bind(addr.as_slice()).await?)
 }
