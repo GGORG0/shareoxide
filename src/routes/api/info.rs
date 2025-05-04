@@ -18,11 +18,11 @@ pub fn routes() -> Vec<Route> {
     method(get),
     path = PATH,
     responses(
-        (status = OK, description = "Success", body = GetVersionResponse, content_type = "application/json")
+        (status = OK, description = "Success", body = inline(GetInfoResponse), content_type = "application/json")
     )
 )]
-async fn get(State(settings): State<ArcSettings>) -> Json<GetVersionResponse> {
-    Json(GetVersionResponse {
+async fn get(State(settings): State<ArcSettings>) -> Json<GetInfoResponse> {
+    Json(GetInfoResponse {
         name: env!("CARGO_PKG_NAME"),
         version: env!("CARGO_PKG_VERSION"),
         repo: env!("CARGO_PKG_REPOSITORY"),
@@ -31,7 +31,7 @@ async fn get(State(settings): State<ArcSettings>) -> Json<GetVersionResponse> {
 }
 
 #[derive(Serialize, ToSchema)]
-struct GetVersionResponse {
+struct GetInfoResponse {
     name: &'static str,
     version: &'static str,
     repo: &'static str,
