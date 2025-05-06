@@ -196,7 +196,18 @@ async fn init_axum(
 
     let mut oidc_client = OidcClient::<GroupClaims>::builder()
         .with_default_http_client()
-        .with_redirect_url(format!("{}/oidc", state.settings.general.public_url).parse()?)
+        .with_redirect_url(
+            format!(
+                "{}/oidc",
+                state
+                    .settings
+                    .general
+                    .public_url
+                    .to_string()
+                    .trim_end_matches('/')
+            )
+            .parse()?,
+        )
         .with_client_id(state.settings.oidc.client_id.as_str())
         .add_scope("profile")
         .add_scope("email")
