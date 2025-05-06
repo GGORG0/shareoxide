@@ -2,6 +2,7 @@ mod routes;
 mod schema;
 mod settings;
 mod state;
+mod userid_extractor;
 
 use std::{net::SocketAddr, ops::Deref, sync::Arc, time::Duration};
 
