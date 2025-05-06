@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use axum_oidc::OidcClaims;
 use serde::{Deserialize, Serialize};
 use surrealdb::{engine::any::Any, Datetime, RecordId, RecordIdKey, Surreal};
+use utoipa::ToSchema;
 
 use crate::GroupClaims;
 
@@ -59,12 +60,18 @@ pub trait DatabaseObjectData: Sized + for<'de> Deserialize<'de> + Serialize {
 }
 
 macro_rules! define_table {
-    ($table:ident $(, $field:ident : $ty:ty)*) => {
+    ($table:ident, {
+        $( $(#[$meta:meta])* $field:ident : $ty:ty ),* $(,)?
+    }) => {
         paste::paste! {
-            #[derive(Debug, serde::Serialize, serde::Deserialize)]
+            #[derive(Debug, Serialize, Deserialize, ToSchema)]
             pub struct [<$table:camel>] {
-                pub id: surrealdb::RecordId,
-                $(pub $field: $ty,)*
+                #[schema(value_type = String)]
+                pub id: RecordId,
+                $(
+                    $(#[$meta])*
+                    pub $field: $ty,
+                )*
             }
 
             impl DatabaseObject for [<$table:camel>] {
@@ -76,9 +83,12 @@ macro_rules! define_table {
                 }
             }
 
-            #[derive(Debug, serde::Serialize, serde::Deserialize)]
+            #[derive(Debug, Serialize, Deserialize, ToSchema)]
             pub struct [<$table:camel Data>] {
-                $(pub $field: $ty,)*
+                $(
+                    $(#[$meta])*
+                    pub $field: $ty,
+                )*
             }
 
             impl DatabaseObjectData for [<$table:camel Data>] {
@@ -96,11 +106,35 @@ macro_rules! define_table {
     };
 }
 
-define_table!(user, subject: String, name: String, email: String);
-define_table!(link, url: String);
-define_table!(shortcut, link: String);
-define_table!(expands_to, r#in: RecordId, out: RecordId);
-define_table!(created, r#in: RecordId, out: RecordId, timestamp: Datetime);
+define_table!(user, {
+    subject: String,
+    name: String,
+    email: String,
+});
+
+define_table!(link, {
+    url: String,
+});
+
+define_table!(shortcut, {
+    link: String,
+});
+
+define_table!(expands_to, {
+    #[schema(value_type = String)]
+    r#in: RecordId,
+    #[schema(value_type = String)]
+    out: RecordId,
+});
+
+define_table!(created, {
+    #[schema(value_type = String)]
+    r#in: RecordId,
+    #[schema(value_type = String)]
+    out: RecordId,
+    #[schema(value_type = String)]
+    timestamp: Datetime,
+});
 
 impl From<OidcClaims<GroupClaims>> for UserData {
     fn from(claims: OidcClaims<GroupClaims>) -> Self {
