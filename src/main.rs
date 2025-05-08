@@ -3,6 +3,7 @@ mod schema;
 mod settings;
 mod state;
 mod userid_extractor;
+mod axum_error;
 
 use std::{net::SocketAddr, ops::Deref, sync::Arc, time::Duration};
 

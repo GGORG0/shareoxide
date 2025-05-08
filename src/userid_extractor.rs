@@ -11,7 +11,7 @@ use surrealdb::RecordId;
 use tower_sessions::Session;
 
 use crate::{
-    schema::{DatabaseObject, DatabaseObjectData, User, UserData},
+    schema::{DatabaseObjectData, UserData},
     state::{AppState, SurrealDb},
     GroupClaims,
 };
@@ -34,8 +34,7 @@ impl SessionUserId {
     ) -> Result<Option<Self>, surrealdb::Error> {
         Ok(
             match db
-                .query("SELECT id FROM type::table($table) WHERE subject = $subject")
-                .bind(("table", User::TABLE))
+                .query("SELECT id FROM user WHERE subject = $subject")
                 .bind(("subject", claims.subject().clone()))
                 .await?
                 .take("id")?
