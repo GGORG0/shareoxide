@@ -7,12 +7,12 @@ use axum::{
 use axum_oidc::OidcClaims;
 use color_eyre::{eyre::OptionExt, Result};
 use serde::{Deserialize, Serialize};
-use surrealdb::{engine::any::Any, RecordId, Surreal};
+use surrealdb::RecordId;
 use tower_sessions::Session;
 
 use crate::{
     schema::{DatabaseObject, DatabaseObjectData, User, UserData},
-    state::AppState,
+    state::{AppState, SurrealDb},
     GroupClaims,
 };
 
@@ -30,7 +30,7 @@ impl SessionUserId {
 
     pub async fn from_claims(
         claims: &OidcClaims<GroupClaims>,
-        db: &Surreal<Any>,
+        db: &SurrealDb,
     ) -> Result<Option<Self>, surrealdb::Error> {
         Ok(
             match db
@@ -60,7 +60,7 @@ impl SessionUserId {
     pub async fn from_session_or_claims(
         session: &Session,
         claims: &OidcClaims<GroupClaims>,
-        db: &Surreal<Any>,
+        db: &SurrealDb,
     ) -> Result<Self> {
         match Self::from_session(session).await? {
             Some(value) => Ok(value),

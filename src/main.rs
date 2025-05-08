@@ -18,10 +18,10 @@ use color_eyre::eyre::WrapErr;
 use color_eyre::Result;
 use routes::RouteType;
 use serde::{Deserialize, Serialize};
+use state::SurrealDb;
 use surrealdb::{
     engine::any::{self, Any},
     opt::auth::{Database, Namespace, Root},
-    Surreal,
 };
 use tokio::{net::TcpListener, time::interval};
 use tower::ServiceBuilder;
@@ -112,7 +112,7 @@ fn init_tracing() -> Result<()> {
 }
 
 #[instrument(skip(settings))]
-async fn init_surrealdb(settings: &Settings) -> Result<Surreal<Any>> {
+async fn init_surrealdb(settings: &Settings) -> Result<SurrealDb> {
     let db = any::connect(&settings.db.endpoint).await?;
 
     debug!("Trying to sign in as a database user");
@@ -156,7 +156,7 @@ async fn init_surrealdb(settings: &Settings) -> Result<Surreal<Any>> {
     Ok(db)
 }
 
-async fn init_session_store(db: &Surreal<Any>) -> SessionManagerLayer<SurrealSessionStore<Any>> {
+async fn init_session_store(db: &SurrealDb) -> SessionManagerLayer<SurrealSessionStore<Any>> {
     let session_store = SurrealSessionStore::new(db.clone(), "session".to_string());
 
     {

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use surrealdb::{engine::any::Any, Datetime, RecordId, RecordIdKey, Surreal};
 use utoipa::ToSchema;
 
-use crate::GroupClaims;
+use crate::{state::SurrealDb, GroupClaims};
 
 #[async_trait]
 pub trait DatabaseObject: Sized + for<'de> Deserialize<'de> + Serialize {
@@ -16,7 +16,7 @@ pub trait DatabaseObject: Sized + for<'de> Deserialize<'de> + Serialize {
     fn id(&self) -> &RecordId;
 
     async fn select(
-        db: &Surreal<Any>,
+        db: &SurrealDb,
         id: RecordIdKey,
     ) -> Result<Option<Self>, Box<surrealdb::Error>> {
         Ok(db.select((Self::TABLE, id)).await?)
@@ -24,7 +24,7 @@ pub trait DatabaseObject: Sized + for<'de> Deserialize<'de> + Serialize {
 
     async fn update(
         &self,
-        db: &Surreal<Any>,
+        db: &SurrealDb,
         upsert: bool,
     ) -> Result<Option<Self>, Box<surrealdb::Error>> {
         let serialized = serde_json::to_value(self).map_err(|e| {
@@ -38,7 +38,7 @@ pub trait DatabaseObject: Sized + for<'de> Deserialize<'de> + Serialize {
         })
     }
 
-    async fn delete(&self, db: &Surreal<Any>) -> Result<Option<Self>, Box<surrealdb::Error>> {
+    async fn delete(&self, db: &SurrealDb) -> Result<Option<Self>, Box<surrealdb::Error>> {
         Ok(db.delete(self.id()).await?)
     }
 }
@@ -49,7 +49,7 @@ pub trait DatabaseObjectData: Sized + for<'de> Deserialize<'de> + Serialize {
 
     async fn create(
         &self,
-        db: &Surreal<Any>,
+        db: &SurrealDb,
     ) -> Result<Option<Self::FullType>, Box<surrealdb::Error>> {
         let serialized = serde_json::to_value(self).map_err(|e| {
             surrealdb::Error::Api(surrealdb::error::Api::SerializeValue(e.to_string()))

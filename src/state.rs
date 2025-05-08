@@ -24,7 +24,7 @@ impl Deref for AppState {
 
 pub struct InnerState {
     pub settings: ArcSettings,
-    pub db: Surreal<Any>,
+    pub db: SurrealDb,
 }
 
 impl FromRef<AppState> for ArcSettings {
@@ -33,7 +33,9 @@ impl FromRef<AppState> for ArcSettings {
     }
 }
 
-impl FromRef<AppState> for Surreal<Any> {
+pub type SurrealDb = Surreal<Any>;
+
+impl FromRef<AppState> for SurrealDb {
     fn from_ref(state: &AppState) -> Self {
         state.db.clone()
     }
