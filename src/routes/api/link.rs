@@ -7,7 +7,11 @@ use utoipa::ToSchema;
 use utoipa_axum::routes;
 
 use crate::{
-    axum_error::AxumResult, routes::RouteType, state::SurrealDb, userid_extractor::SessionUserId,
+    axum_error::AxumResult,
+    routes::RouteType,
+    serialize_recordid::{serialize_recordid, serialize_recordid_vec},
+    state::SurrealDb,
+    userid_extractor::SessionUserId,
 };
 
 use super::Route;
@@ -15,7 +19,7 @@ use super::Route;
 const PATH: &str = "/api/link";
 
 pub fn routes() -> Vec<Route> {
-    vec![(RouteType::OpenApi(routes!(get)), false)]
+    vec![(RouteType::OpenApi(routes!(get)), true)]
 }
 
 /// Get all links you have access to
@@ -32,7 +36,7 @@ async fn get(
 ) -> AxumResult<Json<Vec<GetLinksResponse>>> {
     Ok(Json(
         db.query(
-            "SELECT VALUE ->created->link.{id, url, shortcuts: <-expands_to<-shortcut} FROM $user",
+            "SELECT VALUE ->created->link.{id, url, shortcuts: <-expands_to<-shortcut} FROM ONLY $user",
         )
         .bind(("user", userid.deref().clone()))
         .await?
@@ -43,8 +47,10 @@ async fn get(
 #[derive(Deserialize, Serialize, ToSchema)]
 struct GetLinksResponse {
     #[schema(value_type = String)]
+    #[serde(serialize_with = "serialize_recordid")]
     id: RecordId,
     #[schema(value_type = Vec<String>)]
+    #[serde(serialize_with = "serialize_recordid_vec")]
     shortcuts: Vec<RecordId>,
     url: String,
 }

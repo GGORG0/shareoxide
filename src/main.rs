@@ -1,9 +1,10 @@
+mod axum_error;
 mod routes;
 mod schema;
+mod serialize_recordid;
 mod settings;
 mod state;
 mod userid_extractor;
-mod axum_error;
 
 use std::{net::SocketAddr, ops::Deref, sync::Arc, time::Duration};
 
@@ -221,7 +222,7 @@ async fn init_axum(
 
     let oidc_client = oidc_client
         .discover(state.settings.oidc.issuer.deref().clone())
-        .instrument(info_span!("OIDC discovery"))
+        .instrument(info_span!("oidc_discover"))
         .await?
         .build();
 

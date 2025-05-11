@@ -18,12 +18,12 @@ use crate::{
 
 const USER_ID_KEY: &str = "user_id";
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SessionUserId(pub RecordId);
 
 impl SessionUserId {
     pub async fn from_session(
-        session: &Session,
+        session: Session,
     ) -> Result<Option<Self>, tower_sessions::session::Error> {
         session.get::<Self>(USER_ID_KEY).await
     }
@@ -57,22 +57,25 @@ impl SessionUserId {
     }
 
     pub async fn from_session_or_claims(
-        session: &Session,
+        session: Session,
         claims: &OidcClaims<GroupClaims>,
         db: &SurrealDb,
     ) -> Result<Self> {
-        match Self::from_session(session).await? {
+        match Self::from_session(session.clone()).await? {
             Some(value) => Ok(value),
             None => Self::from_claims(claims, db)
                 .await?
+                .inspect(|userid| {
+                    let userid = userid.clone();
+                    tokio::task::spawn(async move {
+                        userid.to_session(session).await
+                    });
+                })
                 .ok_or_eyre("Failed to get user id"),
         }
     }
 
-    pub async fn to_session(
-        &self,
-        session: &mut Session,
-    ) -> Result<(), tower_sessions::session::Error> {
+    pub async fn to_session(&self, session: Session) -> Result<(), tower_sessions::session::Error> {
         session.insert(USER_ID_KEY, self.0.to_string()).await
     }
 }
@@ -117,7 +120,7 @@ impl FromRequestParts<AppState> for SessionUserId {
             .await
             .map_err(|_| (StatusCode::UNAUTHORIZED, "Failed to extract token claims"))?;
 
-        Self::from_session_or_claims(&session, &claims, &state.db)
+        Self::from_session_or_claims(session, &claims, &state.db)
             .await
             .map_err(|_| (StatusCode::UNAUTHORIZED, "Failed to get user id"))
     }
