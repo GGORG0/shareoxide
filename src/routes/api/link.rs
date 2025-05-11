@@ -19,7 +19,11 @@ use super::Route;
 const PATH: &str = "/api/link";
 
 pub fn routes() -> Vec<Route> {
-    [vec![(RouteType::OpenApi(routes!(get)), true)], by_id::routes()].concat()
+    [
+        vec![(RouteType::OpenApi(routes!(get)), true)],
+        by_id::routes(),
+    ]
+    .concat()
 }
 
 /// Get all links you have access to
@@ -57,7 +61,6 @@ struct GetLinkResponse {
 
 mod by_id {
     use axum::{extract::Path, http::StatusCode, response::IntoResponse};
-    use surrealdb::RecordIdKey;
 
     use super::*;
 
