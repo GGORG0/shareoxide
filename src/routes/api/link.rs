@@ -1,6 +1,7 @@
 use std::ops::Deref;
 
 use axum::{extract::State, Json};
+use color_eyre::eyre::{eyre, OptionExt};
 use serde::{Deserialize, Serialize};
 use surrealdb::RecordId;
 use utoipa::ToSchema;
@@ -9,6 +10,7 @@ use utoipa_axum::routes;
 use crate::{
     axum_error::AxumResult,
     routes::RouteType,
+    schema::{CreatedData, Link, LinkData, Shortcut, ShortcutData},
     serialize_recordid::{serialize_recordid_as_key, serialize_recordid_vec_as_key},
     state::SurrealDb,
     userid_extractor::SessionUserId,
@@ -31,7 +33,7 @@ pub fn routes() -> Vec<Route> {
     method(get),
     path = PATH,
     responses(
-        (status = OK, description = "Success", body = inline(Vec<GetLinkResponse>), content_type = "application/json")
+        (status = OK, description = "Success", body = Vec<GetLinkResponse>)
     )
 )]
 async fn get(
@@ -59,6 +61,64 @@ struct GetLinkResponse {
     url: String,
 }
 
+/// Create a new link
+#[utoipa::path(
+    method(get),
+    path = PATH,
+    request_body = PostLinkBody,
+    responses(
+        (status = OK, description = "Success", body = GetLinkResponse)
+    )
+)]
+async fn post(
+    State(db): State<SurrealDb>,
+    userid: SessionUserId,
+    Json(body): Json<PostLinkBody>,
+) -> AxumResult<Json<GetLinkResponse>> {
+    let created_link: Link = db
+        .create("link")
+        .content(LinkData { url: body.url })
+        .await?
+        .ok_or_eyre("Failed to create link")?;
+
+    match body.shortcuts {
+        Some(shortcuts) => {
+            let created_shortcuts: Vec<Shortcut> = db
+                .insert("shortcut")
+                .content(
+                    shortcuts
+                        .iter()
+                        .map(|shortcut| ShortcutData {
+                            link: shortcut.clone(),
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .await?;
+
+            db.insert("created").relation(created_shortcuts.iter().map(|shortcut| CreatedData {
+                
+            }))
+        }
+        None => {}
+    }
+
+    Ok(Json(db.query(
+            "SELECT id, url, <-expands_to<-shortcut AS shortcuts FROM ONLY $link WHERE array::any(array::matches(<-created<-user.id, $user))",
+        )
+        .bind(("link", created_link.id))
+        .bind(("user", userid.deref().clone()))
+        .await?
+        .take::<Option<GetLinkResponse>>(0)?.ok_or_eyre("Failed to create link")?
+        ))
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct PostLinkBody {
+    /// The short URLs to create for this link. Set to `null` to get 1 random 8-character shortcut.
+    shortcuts: Option<Vec<String>>,
+    url: String,
+}
+
 mod by_id {
     use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 
@@ -75,10 +135,10 @@ mod by_id {
         method(get),
         path = PATH,
         params(
-            ("id" = String, description = "The id of the link to get")
+            ("id", description = "The id of the link to get")
         ),
         responses(
-            (status = OK, description = "Success", body = inline(GetLinkResponse), content_type = "application/json")
+            (status = OK, description = "Success", body = GetLinkResponse)
         )
     )]
     async fn get(

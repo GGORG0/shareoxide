@@ -18,7 +18,7 @@ pub fn routes() -> Vec<Route> {
     method(get),
     path = PATH,
     responses(
-        (status = OK, description = "Success", body = inline(GetInfoResponse), content_type = "application/json")
+        (status = OK, description = "Success", body = GetInfoResponse)
     )
 )]
 async fn get(State(settings): State<ArcSettings>) -> Json<GetInfoResponse> {

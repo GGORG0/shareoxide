@@ -120,13 +120,17 @@ define_table!(shortcut, {
 });
 
 define_table!(expands_to, {
-    r#in: RecordId,
-    out: RecordId,
+    #[serde(rename = "in")]
+    shortcut: RecordId,
+    #[serde(rename = "out")]
+    object: RecordId,
 });
 
 define_table!(created, {
-    r#in: RecordId,
-    out: RecordId,
+    #[serde(rename = "in")]
+    user: RecordId,
+    #[serde(rename = "out")]
+    object: RecordId,
     timestamp: Datetime,
 });
 

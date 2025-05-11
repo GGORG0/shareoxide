@@ -15,7 +15,7 @@ pub fn routes() -> Vec<Route> {
     method(get),
     path = PATH,
     responses(
-        (status = OK, description = "Success", body = str, content_type = "text/plain")
+        (status = OK, description = "Success", body = str)
     )
 )]
 async fn get() -> &'static str {
