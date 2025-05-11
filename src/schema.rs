@@ -64,9 +64,8 @@ macro_rules! define_table {
         $( $(#[$meta:meta])* $field:ident : $ty:ty ),* $(,)?
     }) => {
         paste::paste! {
-            #[derive(Debug, Serialize, Deserialize, ToSchema)]
+            #[derive(Debug, Serialize, Deserialize)]
             pub struct [<$table:camel>] {
-                #[schema(value_type = String)]
                 pub id: RecordId,
                 $(
                     $(#[$meta])*
@@ -83,7 +82,7 @@ macro_rules! define_table {
                 }
             }
 
-            #[derive(Debug, Serialize, Deserialize, ToSchema)]
+            #[derive(Debug, Serialize, Deserialize)]
             pub struct [<$table:camel Data>] {
                 $(
                     $(#[$meta])*
@@ -121,18 +120,13 @@ define_table!(shortcut, {
 });
 
 define_table!(expands_to, {
-    #[schema(value_type = String)]
     r#in: RecordId,
-    #[schema(value_type = String)]
     out: RecordId,
 });
 
 define_table!(created, {
-    #[schema(value_type = String)]
     r#in: RecordId,
-    #[schema(value_type = String)]
     out: RecordId,
-    #[schema(value_type = String)]
     timestamp: Datetime,
 });
 
