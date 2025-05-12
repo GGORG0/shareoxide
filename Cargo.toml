@@ -18,6 +18,7 @@ openidconnect = { version = "4.0.0", default-features = false, features = [
     "rustls-tls",
     "timing-resistant-secret-traits",
 ] }
+partial_struct = "0.4.5"
 paste = "1.0.15"
 reqwest = { version = "0.12.15", features = [
     "rustls-tls",
@@ -54,3 +55,4 @@ utoipa-rapidoc = { version = "6.0.0", features = ["axum"] }
 utoipa-redoc = { version = "6.0.0", features = ["axum"] }
 utoipa-scalar = { version = "0.3.0", features = ["axum"] }
 utoipa-swagger-ui = { version = "9.0.1", features = ["axum"] }
+visible = "0.0.1"

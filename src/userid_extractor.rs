@@ -12,7 +12,7 @@ use tower_sessions::Session;
 use tracing::{error, warn};
 
 use crate::{
-    schema::{DatabaseObjectData, UserData},
+    schema::{User, UserData},
     state::{AppState, SurrealDb},
     GroupClaims,
 };
@@ -50,9 +50,9 @@ impl SessionUserId {
                         name: claims.name().unwrap().get(None).unwrap().to_string(),
                     };
 
-                    user.create(db)
-                        .await
-                        .map_err(|err| *err)?
+                    db.create::<Option<User>>("user")
+                        .content(user)
+                        .await?
                         .map(|user| Self(user.id))
                 }
             },

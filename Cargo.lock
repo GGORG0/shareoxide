@@ -2763,6 +2763,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "partial_struct"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4105d8aa4abd4e22c00d72955c14848b227eaa74c6e17542ced04ad5de08b6bc"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
 name = "password-hash"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3964,6 +3976,7 @@ dependencies = [
  "http",
  "http-serde-ext",
  "openidconnect",
+ "partial_struct",
  "paste",
  "reqwest",
  "serde",
@@ -3984,6 +3997,7 @@ dependencies = [
  "utoipa-redoc",
  "utoipa-scalar",
  "utoipa-swagger-ui",
+ "visible",
 ]
 
 [[package]]
@@ -5152,6 +5166,16 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "visible"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a044005fd5c0fc1ebd79c622e5606431c6b879a6a19acafb754be9926a2de73e"
+dependencies = [
+ "quote",
+ "syn 1.0.109",
+]
 
 [[package]]
 name = "walkdir"
