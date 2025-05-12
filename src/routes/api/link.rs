@@ -10,7 +10,7 @@ use utoipa_axum::routes;
 use crate::{
     axum_error::AxumResult,
     routes::RouteType,
-    schema::{CreatedData, Link, LinkData, Shortcut, ShortcutData},
+    schema::{PartialCreated, Link, PartialLink, Shortcut, PartialShortcut},
     serialize_recordid::{serialize_recordid_as_key, serialize_recordid_vec_as_key},
     state::SurrealDb,
     userid_extractor::SessionUserId,
@@ -77,7 +77,7 @@ async fn post(
 ) -> AxumResult<Json<GetLinkResponse>> {
     let created_link: Link = db
         .create("link")
-        .content(LinkData { url: body.url })
+        .content(PartialLink { url: body.url })
         .await?
         .ok_or_eyre("Failed to create link")?;
 
@@ -88,16 +88,15 @@ async fn post(
                 .content(
                     shortcuts
                         .iter()
-                        .map(|shortcut| ShortcutData {
+                        .map(|shortcut| PartialShortcut {
                             link: shortcut.clone(),
                         })
                         .collect::<Vec<_>>(),
                 )
                 .await?;
 
-            db.insert("created").relation(created_shortcuts.iter().map(|shortcut| CreatedData {
-                
-            }))
+            // db.insert("created")
+            //     .relation(created_shortcuts.iter().map(|shortcut| PartialCreated {}))
         }
         None => {}
     }

@@ -12,7 +12,7 @@ use tower_sessions::Session;
 use tracing::{error, warn};
 
 use crate::{
-    schema::{User, UserData},
+    schema::{PartialUser, User},
     state::{AppState, SurrealDb},
     GroupClaims,
 };
@@ -44,7 +44,7 @@ impl SessionUserId {
             {
                 Some(id) => Some(Self(id)),
                 None => {
-                    let user = UserData {
+                    let user = PartialUser {
                         subject: claims.subject().deref().clone(),
                         email: claims.email().unwrap().deref().clone(),
                         name: claims.name().unwrap().get(None).unwrap().to_string(),
