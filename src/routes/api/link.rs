@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use axum::{extract::State, Json};
-use color_eyre::eyre::{eyre, OptionExt};
+use color_eyre::eyre::OptionExt;
 use serde::{Deserialize, Serialize};
 use surrealdb::RecordId;
 use utoipa::ToSchema;
@@ -10,7 +10,10 @@ use utoipa_axum::routes;
 use crate::{
     axum_error::AxumResult,
     routes::RouteType,
-    schema::{PartialCreated, Link, PartialLink, Shortcut, PartialShortcut},
+    schema::{
+        Created, ExpandsTo, Link, PartialCreated, PartialExpandsTo, PartialLink, PartialShortcut,
+        Shortcut,
+    },
     serialize_recordid::{serialize_recordid_as_key, serialize_recordid_vec_as_key},
     state::SurrealDb,
     userid_extractor::SessionUserId,
@@ -81,6 +84,14 @@ async fn post(
         .await?
         .ok_or_eyre("Failed to create link")?;
 
+    let _: Option<Created> = db
+        .insert("created")
+        .relation(PartialCreated {
+            object: created_link.id.clone(),
+            user: userid.deref().clone(),
+        })
+        .await?;
+
     match body.shortcuts {
         Some(shortcuts) => {
             let created_shortcuts: Vec<Shortcut> = db
@@ -95,8 +106,31 @@ async fn post(
                 )
                 .await?;
 
-            // db.insert("created")
-            //     .relation(created_shortcuts.iter().map(|shortcut| PartialCreated {}))
+            let _: Vec<Created> = db
+                .insert("created")
+                .relation(
+                    created_shortcuts
+                        .iter()
+                        .map(|shortcut| PartialCreated {
+                            object: shortcut.id.clone(),
+                            user: userid.deref().clone(),
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .await?;
+
+            let _: Vec<ExpandsTo> = db
+                .insert("expands_to")
+                .relation(
+                    created_shortcuts
+                        .iter()
+                        .map(|shortcut| PartialExpandsTo {
+                            object: created_link.id.clone(),
+                            shortcut: shortcut.id.clone(),
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .await?;
         }
         None => {}
     }
