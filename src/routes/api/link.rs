@@ -1,7 +1,8 @@
 use std::ops::Deref;
 
 use axum::{extract::State, Json};
-use color_eyre::eyre::OptionExt;
+use color_eyre::eyre::{eyre, OptionExt};
+use rand::distr::{Alphanumeric, SampleString as _};
 use serde::{Deserialize, Serialize};
 use surrealdb::RecordId;
 use utoipa::ToSchema;
@@ -25,7 +26,7 @@ const PATH: &str = "/api/link";
 
 pub fn routes() -> Vec<Route> {
     [
-        vec![(RouteType::OpenApi(routes!(get)), true)],
+        vec![(RouteType::OpenApi(routes!(get, post)), true)],
         by_id::routes(),
     ]
     .concat()
@@ -66,7 +67,7 @@ struct GetLinkResponse {
 
 /// Create a new link
 #[utoipa::path(
-    method(get),
+    method(post),
     path = PATH,
     request_body = PostLinkBody,
     responses(
@@ -84,7 +85,7 @@ async fn post(
         .await?
         .ok_or_eyre("Failed to create link")?;
 
-    let _: Option<Created> = db
+    let link_created_rel: Vec<Created> = db
         .insert("created")
         .relation(PartialCreated {
             object: created_link.id.clone(),
@@ -92,47 +93,65 @@ async fn post(
         })
         .await?;
 
-    match body.shortcuts {
-        Some(shortcuts) => {
-            let created_shortcuts: Vec<Shortcut> = db
-                .insert("shortcut")
-                .content(
-                    shortcuts
-                        .iter()
-                        .map(|shortcut| PartialShortcut {
-                            link: shortcut.clone(),
-                        })
-                        .collect::<Vec<_>>(),
-                )
-                .await?;
+    if link_created_rel.is_empty() {
+        let _: Option<Link> = db.delete(&created_link.id).await?;
+        return Err(eyre!("Failed to create link").into());
+    }
 
-            let _: Vec<Created> = db
-                .insert("created")
-                .relation(
-                    created_shortcuts
-                        .iter()
-                        .map(|shortcut| PartialCreated {
-                            object: shortcut.id.clone(),
-                            user: userid.deref().clone(),
-                        })
-                        .collect::<Vec<_>>(),
-                )
-                .await?;
+    let shortcuts = body.shortcuts.unwrap_or_else(|| {
+        let mut rng = rand::rng();
+        let shortcut = Alphanumeric.sample_string(&mut rng, 10);
+        vec![shortcut]
+    });
 
-            let _: Vec<ExpandsTo> = db
-                .insert("expands_to")
-                .relation(
-                    created_shortcuts
-                        .iter()
-                        .map(|shortcut| PartialExpandsTo {
-                            object: created_link.id.clone(),
-                            shortcut: shortcut.id.clone(),
-                        })
-                        .collect::<Vec<_>>(),
-                )
-                .await?;
-        }
-        None => {}
+    let created_shortcuts: Vec<Shortcut> = db
+        .insert("shortcut")
+        .content(
+            shortcuts
+                .iter()
+                .map(|shortcut| PartialShortcut {
+                    link: shortcut.clone(),
+                })
+                .collect::<Vec<_>>(),
+        )
+        .await?;
+
+    if created_shortcuts.len() != created_shortcuts.len() {
+        return Err(eyre!("Failed to create shortcuts").into());
+    }
+
+    let shortcuts_created_rel: Vec<Created> = db
+        .insert("created")
+        .relation(
+            created_shortcuts
+                .iter()
+                .map(|shortcut| PartialCreated {
+                    object: shortcut.id.clone(),
+                    user: userid.deref().clone(),
+                })
+                .collect::<Vec<_>>(),
+        )
+        .await?;
+
+    if shortcuts_created_rel.len() != created_shortcuts.len() {
+        return Err(eyre!("Failed to create shortcuts").into());
+    }
+
+    let expands_to_rel: Vec<ExpandsTo> = db
+        .insert("expands_to")
+        .relation(
+            created_shortcuts
+                .iter()
+                .map(|shortcut| PartialExpandsTo {
+                    object: created_link.id.clone(),
+                    shortcut: shortcut.id.clone(),
+                })
+                .collect::<Vec<_>>(),
+        )
+        .await?;
+
+    if expands_to_rel.len() != created_shortcuts.len() {
+        return Err(eyre!("Failed to create shortcuts").into());
     }
 
     Ok(Json(db.query(
@@ -147,7 +166,7 @@ async fn post(
 
 #[derive(Deserialize, Serialize, ToSchema)]
 struct PostLinkBody {
-    /// The short URLs to create for this link. Set to `null` to get 1 random 8-character shortcut.
+    /// The short URLs to create for this link. Set to `null` to get 1 random 10-character shortcut.
     shortcuts: Option<Vec<String>>,
     url: String,
 }

@@ -178,7 +178,7 @@ async fn init_session_store(db: &SurrealDb) -> SessionManagerLayer<SurrealSessio
         .with_secure(false)
         .with_same_site(SameSite::Lax)
         .with_expiry(Expiry::OnInactivity(
-            tower_sessions::cookie::time::Duration::minutes(60),
+            tower_sessions::cookie::time::Duration::days(7),
         ))
 }
 
@@ -213,8 +213,7 @@ async fn init_axum(
         )
         .with_client_id(state.settings.oidc.client_id.as_str())
         .add_scope("profile")
-        .add_scope("email")
-        .add_scope("offline_access");
+        .add_scope("email");
 
     if let Some(client_secret) = state.settings.oidc.client_secret.as_ref() {
         oidc_client = oidc_client.with_client_secret(client_secret.secret().clone());

@@ -93,7 +93,7 @@ impl Settings {
         }
 
         settings = settings
-            .add_source(File::with_name(&format!("config-{}", environment_type)).required(false))
+            .add_source(File::with_name(&format!("config-{environment_type}")).required(false))
             .add_source(File::with_name("config-local").required(false))
             .add_source(Environment::with_prefix(ENV_PREFIX).separator(ENV_SEPARATOR));
 

@@ -3978,6 +3978,7 @@ dependencies = [
  "openidconnect",
  "partial_struct",
  "paste",
+ "rand 0.9.1",
  "reqwest",
  "serde",
  "serde_json",
