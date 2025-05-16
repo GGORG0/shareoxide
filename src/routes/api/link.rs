@@ -179,7 +179,7 @@ mod by_id {
     const PATH: &str = "/api/link/{id}";
 
     pub fn routes() -> Vec<Route> {
-        vec![(RouteType::OpenApi(routes!(get)), true)]
+        vec![(RouteType::OpenApi(routes!(get, delete)), true)]
     }
 
     /// Get a specific link by id
@@ -210,5 +210,38 @@ mod by_id {
             Some(link) => Ok(Json(link).into_response()),
             None => Ok((StatusCode::NOT_FOUND, "Link not found").into_response()),
         }
+    }
+
+    /// Delete a link
+    #[utoipa::path(
+        method(delete),
+        path = PATH,
+        params(
+            ("id", description = "The id of the link to delete")
+        ),
+        responses(
+            (status = OK, description = "Success", body = GetLinkResponse)
+        )
+    )]
+    async fn delete(
+        State(db): State<SurrealDb>,
+        userid: SessionUserId,
+        Path(id): Path<String>,
+    ) -> AxumResult<impl IntoResponse> {
+        let id = RecordId::from_table_key("link", id);
+
+        let deleted: Vec<Link> = db.query(
+            "DELETE $link WHERE array::any(array::matches(<-created<-user.id, $user)) RETURN BEFORE",
+        )
+        .bind(("link", id))
+        .bind(("user", userid.deref().clone()))
+        .await?
+        .take(0)?;
+
+        Ok(if deleted.is_empty() {
+            (StatusCode::NOT_FOUND, "Link not found").into_response()
+        } else {
+            ("Link deleted successfully").into_response()
+        })
     }
 }
