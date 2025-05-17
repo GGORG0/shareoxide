@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use axum::{extract::State, Json};
+use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use color_eyre::eyre::{eyre, OptionExt};
 use rand::distr::{Alphanumeric, SampleString as _};
 use serde::{Deserialize, Serialize};
@@ -78,7 +78,29 @@ async fn post(
     State(db): State<SurrealDb>,
     userid: SessionUserId,
     Json(body): Json<PostLinkBody>,
-) -> AxumResult<Json<GetLinkResponse>> {
+) -> AxumResult<impl IntoResponse> {
+    let shortcuts = body.shortcuts.unwrap_or_else(|| {
+        let mut rng = rand::rng();
+        let shortcut = Alphanumeric.sample_string(&mut rng, 10);
+        vec![shortcut]
+    });
+
+    let collisions: Vec<String> = db
+        .query(
+            "SELECT VALUE link FROM shortcut WHERE array::any(array::matches($shortcuts, link))",
+        )
+        .bind(("shortcuts", shortcuts.clone()))
+        .await?
+        .take(0)?;
+
+    if !collisions.is_empty() {
+        return Ok((
+            StatusCode::BAD_REQUEST,
+            format!("Shortcuts already exist: {}", collisions.join(", ")),
+        )
+            .into_response());
+    }
+
     let created_link: Link = db
         .create("link")
         .content(PartialLink { url: body.url })
@@ -97,12 +119,6 @@ async fn post(
         let _: Option<Link> = db.delete(&created_link.id).await?;
         return Err(eyre!("Failed to create link").into());
     }
-
-    let shortcuts = body.shortcuts.unwrap_or_else(|| {
-        let mut rng = rand::rng();
-        let shortcut = Alphanumeric.sample_string(&mut rng, 10);
-        vec![shortcut]
-    });
 
     let created_shortcuts: Vec<Shortcut> = db
         .insert("shortcut")
@@ -161,7 +177,7 @@ async fn post(
         .bind(("user", userid.deref().clone()))
         .await?
         .take::<Option<GetLinkResponse>>(0)?.ok_or_eyre("Failed to create link")?
-        ))
+        ).into_response())
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
@@ -212,7 +228,7 @@ mod by_id {
         }
     }
 
-    /// Delete a link
+    /// Delete a link and all shortcuts pointing to it
     #[utoipa::path(
         method(delete),
         path = PATH,
@@ -230,15 +246,27 @@ mod by_id {
     ) -> AxumResult<impl IntoResponse> {
         let id = RecordId::from_table_key("link", id);
 
-        let deleted: Vec<Link> = db.query(
-            "DELETE $link WHERE array::any(array::matches(<-created<-user.id, $user)) RETURN BEFORE",
+        let deleted: Option<bool> = db.query(
+            "
+                BEGIN;
+                IF array::len(SELECT id FROM $link WHERE array::any(array::matches(<-created<-user.id, $user))) == 0 {
+                    RETURN FALSE;
+                    CANCEL;
+                } ELSE {
+                    TRUE
+                };
+                DELETE ONLY $link<-created RETURN BEFORE;
+                DELETE (SELECT VALUE array::flatten([<-expands_to, <-expands_to<-shortcut, <-expands_to<-shortcut<-created]) FROM ONLY $link) RETURN BEFORE;
+                DELETE ONLY $link RETURN BEFORE;
+                COMMIT;
+            ",
         )
         .bind(("link", id))
         .bind(("user", userid.deref().clone()))
         .await?
         .take(0)?;
 
-        Ok(if deleted.is_empty() {
+        Ok(if matches!(deleted, Some(false) | None) {
             (StatusCode::NOT_FOUND, "Link not found").into_response()
         } else {
             ("Link deleted successfully").into_response()
