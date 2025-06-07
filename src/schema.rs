@@ -10,6 +10,9 @@ use visible::StructFields;
 
 use crate::{state::SurrealDb, GroupClaims};
 
+// TODO: make the objects implement `ToSchema` so that I don't have to create another struct for the OpenAPI documentation
+// that would require dealing with `RecordId`
+
 macro_rules! database_object {
     ($name:ident { $($field:tt)* }$(, $($omitfield:ident),*)?) => {
         #[derive(Partial, Debug, Serialize, Deserialize, Clone)]
@@ -35,7 +38,7 @@ database_object!(Link {
 
 database_object!(Shortcut {
     id: RecordId,
-    link: String,
+    shortlink: String,
 });
 
 database_object!(ExpandsTo {

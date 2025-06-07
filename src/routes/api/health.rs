@@ -7,7 +7,7 @@ use super::Route;
 const PATH: &str = "/api/health";
 
 pub fn routes() -> Vec<Route> {
-    vec![(RouteType::OpenApi(routes!(get)), false)]
+    vec![(RouteType::OpenApi(routes!(get_health)), false)]
 }
 
 /// Get health of the service (returns "ok")
@@ -18,6 +18,6 @@ pub fn routes() -> Vec<Route> {
         (status = OK, description = "Success", body = str)
     )
 )]
-async fn get() -> &'static str {
+async fn get_health() -> &'static str {
     "ok"
 }

@@ -9,10 +9,10 @@ use crate::{axum_error::AxumResult, routes::RouteType, state::SurrealDb};
 
 use super::Route;
 
-const PATH: &str = "/{shortcut}";
+const PATH: &str = "/{shortlink}";
 
 pub fn routes() -> Vec<Route> {
-    vec![(RouteType::OpenApi(routes!(get)), false)]
+    vec![(RouteType::OpenApi(routes!(get_shortcut_redirect)), false)]
 }
 
 /// Redirects you to the destination of the shortcut
@@ -20,16 +20,21 @@ pub fn routes() -> Vec<Route> {
     method(get),
     path = PATH,
     params(
-        ("shortcut" = String, Path, description = "The shortcut link to redirect to")
+        ("shortlink" = String, Path, description = "The short link to redirect to")
     ),
     responses(
         (status = OK, description = "Success", body = str)
     )
 )]
-async fn get(State(db): State<SurrealDb>, Path(id): Path<String>) -> AxumResult<impl IntoResponse> {
+async fn get_shortcut_redirect(
+    State(db): State<SurrealDb>,
+    Path(shortlink): Path<String>,
+) -> AxumResult<impl IntoResponse> {
     match db
-        .query("SELECT VALUE ->expands_to->link.url FROM ONLY shortcut WHERE link = $shortcut")
-        .bind(("shortcut", id))
+        .query(
+            "SELECT VALUE ->expands_to->link.url FROM ONLY shortcut WHERE shortlink = $shortlink",
+        )
+        .bind(("shortlink", shortlink))
         .await?
         .take::<Option<String>>(0)?
     {

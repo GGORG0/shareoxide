@@ -8,8 +8,8 @@ DEFINE TABLE OVERWRITE link SCHEMAFULL;
 DEFINE FIELD OVERWRITE url ON TABLE link TYPE string ASSERT string::is::url($value);
 
 DEFINE TABLE OVERWRITE shortcut SCHEMAFULL;
-DEFINE FIELD OVERWRITE link ON TABLE shortcut TYPE string VALUE string::slug($value);
-DEFINE INDEX OVERWRITE shortcutLink ON TABLE shortcut COLUMNS link UNIQUE;
+DEFINE FIELD OVERWRITE shortlink ON TABLE shortcut TYPE string VALUE string::slug($value);
+DEFINE INDEX OVERWRITE shortcutShortlink ON TABLE shortcut COLUMNS shortlink UNIQUE;
 
 DEFINE TABLE OVERWRITE expands_to TYPE RELATION IN shortcut OUT link ENFORCED SCHEMAFULL;
 

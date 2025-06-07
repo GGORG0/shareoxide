@@ -15,7 +15,7 @@ use crate::{
         Created, ExpandsTo, Link, PartialCreated, PartialExpandsTo, PartialLink, PartialShortcut,
         Shortcut,
     },
-    serialize_recordid::{serialize_recordid_as_key, serialize_recordid_vec_as_key},
+    serialize_recordid::serialize_recordid_as_key,
     state::SurrealDb,
     userid_extractor::SessionUserId,
 };
@@ -26,10 +26,22 @@ const PATH: &str = "/api/link";
 
 pub fn routes() -> Vec<Route> {
     [
-        vec![(RouteType::OpenApi(routes!(get, post)), true)],
+        vec![(
+            RouteType::OpenApi(routes!(get_link_list, post_link_list)),
+            true,
+        )],
         by_id::routes(),
     ]
     .concat()
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+struct GetLinkResponse {
+    #[schema(value_type = String)]
+    #[serde(serialize_with = "serialize_recordid_as_key")]
+    id: RecordId,
+    shortcuts: Vec<String>,
+    url: String,
 }
 
 /// Get all links you have access to
@@ -40,29 +52,18 @@ pub fn routes() -> Vec<Route> {
         (status = OK, description = "Success", body = Vec<GetLinkResponse>)
     )
 )]
-async fn get(
+async fn get_link_list(
     State(db): State<SurrealDb>,
     userid: SessionUserId,
 ) -> AxumResult<Json<Vec<GetLinkResponse>>> {
     Ok(Json(
         db.query(
-            "SELECT VALUE ->created->link.{id, url, shortcuts: <-expands_to<-shortcut} FROM ONLY $user",
+            "SELECT VALUE ->created->link.{id, url, shortcuts: <-expands_to<-shortcut.shortlink} FROM ONLY $user",
         )
         .bind(("user", userid.deref().clone()))
         .await?
         .take(0)?,
     ))
-}
-
-#[derive(Deserialize, Serialize, ToSchema)]
-struct GetLinkResponse {
-    #[schema(value_type = String)]
-    #[serde(serialize_with = "serialize_recordid_as_key")]
-    id: RecordId,
-    #[schema(value_type = Vec<String>)]
-    #[serde(serialize_with = "serialize_recordid_vec_as_key")]
-    shortcuts: Vec<RecordId>,
-    url: String,
 }
 
 /// Create a new link
@@ -74,7 +75,7 @@ struct GetLinkResponse {
         (status = OK, description = "Success", body = GetLinkResponse)
     )
 )]
-async fn post(
+async fn post_link_list(
     State(db): State<SurrealDb>,
     userid: SessionUserId,
     Json(body): Json<PostLinkBody>,
@@ -86,9 +87,7 @@ async fn post(
     });
 
     let collisions: Vec<String> = db
-        .query(
-            "SELECT VALUE link FROM shortcut WHERE array::any(array::matches($shortcuts, link))",
-        )
+        .query("SELECT VALUE shortlink FROM shortcut WHERE array::any(array::matches($shortcuts, shortlink))")
         .bind(("shortcuts", shortcuts.clone()))
         .await?
         .take(0)?;
@@ -126,7 +125,7 @@ async fn post(
             shortcuts
                 .iter()
                 .map(|shortcut| PartialShortcut {
-                    link: shortcut.clone(),
+                    shortlink: shortcut.clone(),
                 })
                 .collect::<Vec<_>>(),
         )
@@ -171,7 +170,7 @@ async fn post(
     }
 
     Ok(Json(db.query(
-            "SELECT id, url, <-expands_to<-shortcut AS shortcuts FROM ONLY $link WHERE array::any(array::matches(<-created<-user.id, $user))",
+            "SELECT id, url, <-expands_to<-shortcut.shortlink AS shortcuts FROM ONLY $link WHERE array::any(array::matches(<-created<-user.id, $user))",
         )
         .bind(("link", created_link.id))
         .bind(("user", userid.deref().clone()))
@@ -195,7 +194,7 @@ mod by_id {
     const PATH: &str = "/api/link/{id}";
 
     pub fn routes() -> Vec<Route> {
-        vec![(RouteType::OpenApi(routes!(get, delete)), true)]
+        vec![(RouteType::OpenApi(routes!(get_link, delete_link)), true)]
     }
 
     /// Get a specific link by id
@@ -209,7 +208,7 @@ mod by_id {
             (status = OK, description = "Success", body = GetLinkResponse)
         )
     )]
-    async fn get(
+    async fn get_link(
         State(db): State<SurrealDb>,
         userid: SessionUserId,
         Path(id): Path<String>,
@@ -217,7 +216,7 @@ mod by_id {
         let id = RecordId::from_table_key("link", id);
 
         match db.query(
-            "SELECT id, url, <-expands_to<-shortcut AS shortcuts FROM ONLY $link WHERE array::any(array::matches(<-created<-user.id, $user))",
+            "SELECT id, url, <-expands_to<-shortcut.shortlink AS shortcuts FROM ONLY $link WHERE array::any(array::matches(<-created<-user.id, $user))",
         )
         .bind(("link", id))
         .bind(("user", userid.deref().clone()))
@@ -236,10 +235,10 @@ mod by_id {
             ("id", description = "The id of the link to delete")
         ),
         responses(
-            (status = OK, description = "Success", body = GetLinkResponse)
+            (status = OK, description = "Success", body = str)
         )
     )]
-    async fn delete(
+    async fn delete_link(
         State(db): State<SurrealDb>,
         userid: SessionUserId,
         Path(id): Path<String>,

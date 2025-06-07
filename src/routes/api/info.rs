@@ -10,7 +10,7 @@ use super::Route;
 const PATH: &str = "/api/info";
 
 pub fn routes() -> Vec<Route> {
-    vec![(RouteType::OpenApi(routes!(get)), false)]
+    vec![(RouteType::OpenApi(routes!(get_info)), false)]
 }
 
 /// Get information about the service
@@ -21,7 +21,7 @@ pub fn routes() -> Vec<Route> {
         (status = OK, description = "Success", body = GetInfoResponse)
     )
 )]
-async fn get(State(settings): State<ArcSettings>) -> Json<GetInfoResponse> {
+async fn get_info(State(settings): State<ArcSettings>) -> Json<GetInfoResponse> {
     Json(GetInfoResponse {
         name: env!("CARGO_PKG_NAME"),
         version: env!("CARGO_PKG_VERSION"),
