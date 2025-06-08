@@ -1,4 +1,5 @@
 mod api;
+mod dash;
 mod shortcut_handler;
 
 use axum::routing::MethodRouter;
@@ -7,7 +8,7 @@ use utoipa_axum::router::UtoipaMethodRouter;
 use crate::state::AppState;
 
 pub fn routes() -> Vec<Route> {
-    [api::routes(), shortcut_handler::routes()].concat()
+    [shortcut_handler::routes(), api::routes(), dash::routes()].concat()
 }
 
 type Route = (RouteType, bool);

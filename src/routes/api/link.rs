@@ -36,12 +36,12 @@ pub fn routes() -> Vec<Route> {
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
-struct GetLinkResponse {
+pub struct GetLinkResponse {
     #[schema(value_type = String)]
     #[serde(serialize_with = "serialize_recordid_as_key")]
-    id: RecordId,
-    shortcuts: Vec<String>,
-    url: String,
+    pub id: RecordId,
+    pub shortcuts: Vec<String>,
+    pub url: String,
 }
 
 /// Get all links you have access to

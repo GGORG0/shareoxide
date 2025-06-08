@@ -1,6 +1,6 @@
 mod health;
 mod info;
-mod link;
+pub mod link;
 mod shortcut;
 
 use super::Route;

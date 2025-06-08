@@ -7,12 +7,15 @@ repository = "https://github.com/GGORG0/shareoxide"
 [dependencies]
 async-trait = "0.1.88"
 axum = { version = "0.8.4", features = ["macros"] }
+axum-extra = "0.10.1"
+axum-htmx = "0.8.1"
 axum-oidc = { git = "https://github.com/pfzetto/axum-oidc.git", branch = "pfzetto" }
-color-eyre = "0.6.4"
+color-eyre = "0.6.5"
 config = "0.15.11"
 dotenvy = "0.15.7"
 http = "1.3.1"
 http-serde-ext = "1.0.2"
+maud = { version = "0.27.0", features = ["axum"] }
 openidconnect = { version = "4.0.0", default-features = false, features = [
     "reqwest",
     "rustls-tls",
@@ -21,7 +24,7 @@ openidconnect = { version = "4.0.0", default-features = false, features = [
 partial_struct = "0.4.5"
 paste = "1.0.15"
 rand = { version = "0.9.1", features = ["thread_rng"] }
-reqwest = { version = "0.12.15", features = [
+reqwest = { version = "0.12.19", features = [
     "rustls-tls",
     "http2",
     "charset",
@@ -29,13 +32,13 @@ reqwest = { version = "0.12.15", features = [
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 strum = { version = "0.27.1", features = ["derive"] }
-surrealdb = { version = "2.3.0", features = [
+surrealdb = { version = "2.3.3", features = [
     "http",
     "protocol-http",
     "rustls",
 ] }
-tokio = { version = "1.44.2", features = ["full"] }
-toml = "0.8.22"
+tokio = { version = "1.45.1", features = ["full"] }
+toml = "0.8.23"
 tower = { version = "0.5.2", features = ["full", "tokio", "log"] }
 tower-sessions = "0.14.0"
 tower-sessions-surrealdb-store = { git = "https://github.com/GGORG0/tower-sessions-surrealdb-store", version = "0.6.0" }
@@ -55,5 +58,5 @@ utoipa-axum = "0.2.0"
 utoipa-rapidoc = { version = "6.0.0", features = ["axum"] }
 utoipa-redoc = { version = "6.0.0", features = ["axum"] }
 utoipa-scalar = { version = "0.3.0", features = ["axum"] }
-utoipa-swagger-ui = { version = "9.0.1", features = ["axum"] }
+utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
 visible = "0.0.1"
