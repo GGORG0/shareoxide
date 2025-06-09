@@ -10,4 +10,4 @@ A demo instance is available at <https://shareoxide.ggorg.xyz>. You can log in w
 
 ## API
 
-A Scalar UI for browsing the API docs is available at <https://shareoxide.ggorg.xyz/apidoc/scalar>.
+A Scalar UI for browsing the API docs is available at <https://shareoxide.ggorg.xyz/apidoc/scalar>. Please note that you have to be logged in to use the built-in API tester, otherwise you'll just get a generic-looking error.
